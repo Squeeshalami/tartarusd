@@ -37,4 +37,3 @@ dpad_up = { type = "key", key = "up" }
 dpad_left = { type = "key", key = "left" }
 dpad_right = { type = "key", key = "right" }
 dpad_down = { type = "key", key = "down" }
-thumb_button_1 = { type = "key", key = "enter" }

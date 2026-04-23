@@ -12,6 +12,7 @@ pub fn printUsage() void {
         \\Usage:
         \\  tartarusctl status
         \\  tartarusctl reload
+        \\  tartarusctl quit
         \\  tartarusctl config-path
         \\  tartarusctl validate
         \\  tartarusctl init-config
@@ -313,6 +314,39 @@ pub fn handleReload(allocator: std.mem.Allocator) !void {
     };
 
     std.debug.print("reloaded tartarusd", .{});
+    std.debug.print(" (pids:", .{});
+    for (pids, 0..) |pid, idx| {
+        if (idx > 0) std.debug.print(",", .{});
+        std.debug.print(" {}", .{pid});
+    }
+    std.debug.print(")\n", .{});
+}
+
+pub fn handleQuit(allocator: std.mem.Allocator) !void {
+    const pids = daemon_control.findDaemonPids(allocator) catch |err| {
+        std.debug.print("failed to find tartarusd process: {s}\n", .{@errorName(err)});
+        return;
+    };
+    defer allocator.free(pids);
+
+    if (pids.len == 0) {
+        std.debug.print("tartarusd is not running\n", .{});
+        return;
+    }
+
+    daemon_control.quitDaemonPids(pids) catch |err| {
+        switch (err) {
+            error.PermissionDenied => {
+                std.debug.print("permission denied sending SIGTERM; try running with sudo\n", .{});
+            },
+            else => {
+                std.debug.print("failed to stop tartarusd: {s}\n", .{@errorName(err)});
+            },
+        }
+        return;
+    };
+
+    std.debug.print("stopped tartarusd", .{});
     std.debug.print(" (pids:", .{});
     for (pids, 0..) |pid, idx| {
         if (idx > 0) std.debug.print(",", .{});

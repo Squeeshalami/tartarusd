@@ -35,6 +35,7 @@ pub fn main() !void {
     if (std.mem.eql(u8, cmd, "find-tartarus")) return try commands.handleFindTartarus(allocator);
     if (std.mem.eql(u8, cmd, "lookup-keycode")) return commands.handleLookupKeycode(args);
     if (std.mem.eql(u8, cmd, "reload")) return try commands.handleReload(allocator);
+    if (std.mem.eql(u8, cmd, "quit")) return try commands.handleQuit(allocator);
     if (std.mem.eql(u8, cmd, "doctor")) return try commands.handleDoctor(allocator, config_path);
     std.debug.print("unknown command: {s}\n\n", .{cmd});
     commands.printUsage();

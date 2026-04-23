@@ -236,6 +236,7 @@ fn executeShellCommandAsUser(
         child.env_map = &env;
 
         if (detach) {
+            child.argv = &.{ "setsid", "/bin/sh", "-c", shell_command };
             try child.spawn();
             return;
         }
@@ -264,6 +265,7 @@ fn executeShellCommandAsUser(
     child.stderr_behavior = .Ignore;
 
     if (detach) {
+        child.argv = &.{ "setsid", "/bin/sh", "-c", shell_command };
         try child.spawn();
         return;
     }

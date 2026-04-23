@@ -6,6 +6,7 @@
 - inspecting input devices,
 - checking daemon state,
 - sending reload signals,
+- stopping daemon processes,
 - debugging key mapping behavior.
 
 This document reflects the current implementation in `src/cli`.
@@ -276,6 +277,30 @@ If signaling fails with permission errors, it suggests running with `sudo`.
 
 ---
 
+### `quit`
+
+Sends `SIGTERM` to running `tartarusd` processes so they stop.
+
+```bash
+tartarusctl quit
+```
+
+Behavior:
+
+- finds daemon PIDs via `pgrep tartarusd`,
+- sends `SIGTERM` to each PID,
+- reports success with the PID list.
+
+If no daemon is running, it prints:
+
+```text
+tartarusd is not running
+```
+
+If signaling fails with permission errors, it suggests running with `sudo`.
+
+---
+
 ### `doctor`
 
 Runs an environment checklist and prints `[OK]` / `[FAIL]` lines.
@@ -329,9 +354,18 @@ tartarusctl reload
 tartarusctl status
 ```
 
+### Stop daemon
+
+```bash
+tartarusctl status
+tartarusctl quit
+tartarusctl status
+```
+
 ## Notes and Limitations
 
 - `tartarusctl` currently has no global flags (for example, no `--help`/`--verbose` handler in `main`).
 - `reload` assumes process name matching via `pgrep tartarusd`.
+- `quit` assumes process name matching via `pgrep tartarusd`.
 - Device matching for Tartarus is name-based from sysfs metadata.
 - Most command failures are reported as user-facing text lines; some lower-level errors can still bubble up as process errors.

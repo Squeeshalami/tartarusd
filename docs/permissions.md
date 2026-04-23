@@ -196,6 +196,7 @@ Check with:
 
 ```bash
 zig build run-cli -- status
+zig build run-cli -- quit
 ```
 
 Or:
@@ -242,7 +243,3 @@ Then re-check:
 ```bash
 ls -l /dev/uinput
 ```
-
-## Recommended next step
-
-Once non-root launching works, the next quality-of-life improvement is to run `tartarusd` as a user service so it starts automa

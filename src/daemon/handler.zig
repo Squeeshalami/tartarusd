@@ -8,6 +8,26 @@ pub fn handleEvent(
     state: *state_mod.State,
     event: model.InputEvent,
 ) !void {
+    if (event.trigger == .release and state.endLayerHold(event.logical_key)) {
+        return;
+    }
+
+    // If this key is configured as a hold-layer key on default layer, always
+    // prioritize release-to-default behavior over active-layer remaps.
+    if (event.trigger == .release) {
+        if (state.lookupDefault(event.logical_key)) |default_action| {
+            switch (default_action) {
+                .layer => |a| {
+                    if (a.mode == .hold) {
+                        state.resetLayer();
+                        return;
+                    }
+                },
+                else => {},
+            }
+        }
+    }
+
     const action = state.lookupActive(event.logical_key) orelse return error.NoBinding;
 
     switch (action) {
@@ -47,8 +67,8 @@ pub fn handleEvent(
                 },
                 .hold => {
                     switch (event.trigger) {
-                        .press => try state.setLayer(a.target),
-                        .release => state.resetLayer(),
+                        .press => try state.beginLayerHold(event.logical_key, a.target),
+                        .release => _ = state.endLayerHold(event.logical_key),
                         .repeat => return,
                     }
                 },

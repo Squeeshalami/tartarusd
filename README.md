@@ -37,6 +37,7 @@ Even so, it is functional and usable if you happen to own a **Razer Tartarus V2*
 - checking status
 - validating config
 - reloading the daemon
+- stopping the daemon
 - listing devices
 - inspecting device nodes
 - monitoring raw input devices

@@ -62,3 +62,13 @@ pub fn reloadDaemonPids(pids: []const u32) !void {
         };
     }
 }
+
+pub fn quitDaemonPids(pids: []const u32) !void {
+    for (pids) |pid| {
+        std.posix.kill(@intCast(pid), std.posix.SIG.TERM) catch |err| switch (err) {
+            error.PermissionDenied => return error.PermissionDenied,
+            error.ProcessNotFound => continue,
+            else => return err,
+        };
+    }
+}
