@@ -69,7 +69,7 @@ default_layer = "base"
 | `[global]`        | Conventional place for `default_layer` and notes. |
 | `log_level`       | **Not read** from the file. Use `tartarusd --verbose` (or your service wrapper) for extra logging. |
 
-By default the daemon auto-detects an evdev device whose name contains both `razer` and `tartarus` (see `tartarusctl find-tartarus`, `tartarusctl list-input-devices`). To use a specific node instead:
+By default the daemon auto-detects an evdev device whose name contains both `razer` and `tartarus` (see `tartarusctl find-tartarus`). To use a specific node instead:
 
 ```text
 tartarusd --device /dev/input/event7
@@ -128,7 +128,7 @@ main_01 = { type = "key", key = "1" }
 
 | Field  | Required | Description |
 | ------ | -------- | ----------- |
-| `key`  | yes      | A **key name** recognized by the internal map (Linux keycodes). Use `tartarusctl lookup-keycode <name>` to check. Examples: `1`, `a`, `enter`, `up`, `leftctrl`. |
+| `key`  | yes      | A **key name** recognized by the internal map (Linux keycodes). Examples: `1`, `a`, `enter`, `up`, `leftctrl`. |
 
 **Runtime:** Press and release follow the physical event; autorepeat from the device is ignored for `key` actions.
 
@@ -219,7 +219,6 @@ Typical mistakes:
 ## See also
 
 - `examples/tartarus.toml` — full annotated copy of the default layout and sample bindings.
-- `tartarusctl config-path` — print the resolved path to `tartarus.toml`.
-- `tartarusctl doctor` — quick environment checks (config file presence, device, `/dev/uinput`, daemon process).
+- `tartarusctl status` — environment checks (config file presence, device nodes + access, `/dev/uinput`, daemon process).
 
 Reloading the daemon’s config: **`tartarusctl reload`** sends **SIGHUP** to running `tartarusd` processes; the live event loop then reloads the file from the default config path.

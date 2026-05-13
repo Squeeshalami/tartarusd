@@ -39,9 +39,8 @@ Even so, it is functional and usable if you happen to own a **Razer Tartarus V2*
 - reloading the daemon
 - stopping the daemon
 - listing devices
-- inspecting device nodes
-- monitoring raw input devices
-- running a simple environment doctor check
+- optional low-level device inspection/debugging
+- running an environment health/status check
 
 ---
 
@@ -122,7 +121,7 @@ You can find some setup and getting started information here.
 
 - **[Permissions](docs/permissions.md)** — `udev` rules, the `tartarusd` group, and running without `sudo`
 - **[Configuration](docs/configuration.md)** — `tartarus.toml`: paths, layers, bindings, and action types
-- **[tartarusctl](docs/tartarusctl.md)** — CLI commands, device inspection, and `doctor` / debugging
+- **[tartarusctl](docs/tartarusctl.md)** — CLI commands, device inspection, status checks, and debugging
 
 ---
 

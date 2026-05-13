@@ -65,7 +65,6 @@ This gives members of the `tartarusd` group read/write access to `/dev/uinput`.
 Before writing the input device udev rule, you need to find the vendor and product IDs for your specific Tartarus model. Run:
 
 ```bash
-tartarusctl list-input-devices
 tartarusctl find-tartarus
 ```
 
@@ -191,7 +190,6 @@ If everything is set up correctly, `tartarusd` should:
 ## 11. If the Tartarus node is not obvious
 
 ```bash
-tartarusctl list-input-devices
 tartarusctl find-tartarus
 tartarusctl inspect-device /dev/input/eventX
 ```

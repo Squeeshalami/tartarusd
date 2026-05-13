@@ -12,17 +12,14 @@
 ## Quick Start
 
 ```bash
-# Show where the config file is expected
-tartarusctl config-path
-
 # Create default config if missing
 tartarusctl init-config
 
-# Validate config syntax and action schema
+# Validate config syntax and show active config path
 tartarusctl validate
 
 # Check overall health (config, devices, uinput, daemon)
-tartarusctl doctor
+tartarusctl status
 ```
 
 ## Command Syntax
@@ -32,6 +29,12 @@ tartarusctl <command> [args...]
 ```
 
 If no command is provided, `tartarusctl` prints usage.
+
+Per-command help is available by appending `help`:
+
+```bash
+tartarusctl <command> help
+```
 
 If an unknown command is provided, it prints:
 
@@ -50,26 +53,15 @@ This is why `tartarusctl` and `tartarusd` can behave sensibly when invoked via `
 
 ## Command Reference
 
-### `config-path`
-
-Prints the resolved config file path and exits.
-
-```bash
-tartarusctl config-path
-```
-
-Use this when scripts need the exact path used by the CLI.
-
----
-
 ### `status`
 
-Shows high-level runtime state:
+Shows a structured runtime health report:
 
-- CLI header (`tartarusctl status`)
-- config path
-- whether daemon process(es) are running (`pgrep tartarusd`)
-- matching Tartarus event devices
+- config file availability at the resolved path
+- Tartarus device detection and per-device node access
+- `/dev/uinput` existence and read/write availability
+- daemon state and matching PIDs (`pgrep tartarusd`)
+- final pass/fail summary
 
 ```bash
 tartarusctl status
@@ -79,6 +71,7 @@ Notes:
 
 - Daemon detection uses `pgrep tartarusd`.
 - Device detection uses Tartarus name matching from sysfs metadata.
+- `/dev/uinput` access is checked by opening it read/write.
 
 ---
 
@@ -144,32 +137,6 @@ no binding found for layer=<layer> key=<logical-key>
 
 ---
 
-### `lookup-keycode <name>`
-
-Translates a human key name to Linux keycode using internal keymap tables.
-
-```bash
-tartarusctl lookup-keycode enter
-tartarusctl lookup-keycode leftctrl
-tartarusctl lookup-keycode up
-```
-
-Success output:
-
-```text
-keycode: <name> -> <numeric-code>
-```
-
-Unknown names print:
-
-```text
-unknown key name: <name>
-```
-
-Use this before writing `key` or `combo` actions in config.
-
----
-
 ### `find-tartarus`
 
 Finds event nodes that look like a Tartarus device and prints matching `/dev/input/event*` paths.
@@ -188,66 +155,6 @@ If none are found:
 ```text
 no Tartarus event nodes found
 ```
-
----
-
-### `list-input-devices`
-
-Lists every event device under `/dev/input` and its human-readable name.
-
-```bash
-tartarusctl list-input-devices
-```
-
-Output format:
-
-```text
-input event devices:
-  /dev/input/event0  ->  <name>
-  ...
-```
-
-Useful when you need to choose an explicit node for `inspect-device` or `monitor-device`.
-
----
-
-### `inspect-device <event_path>`
-
-Prints detailed metadata for one event node:
-
-- event path and event name (`eventX`)
-- kernel device name
-- resolved sysfs device path
-- vendor and product ids (if available)
-
-```bash
-tartarusctl inspect-device /dev/input/event7
-```
-
-If the path is invalid or inaccessible, you get a descriptive failure line with the Zig error name.
-
----
-
-### `monitor-device <event_path>`
-
-Streams raw Linux input events from one event node, plus decoded Tartarus control ids when available.
-
-```bash
-tartarusctl monitor-device /dev/input/event7
-```
-
-Printed data includes:
-
-- event timestamp (`sec`, `usec`)
-- event type name (`EV_KEY`, etc.)
-- code and value
-- interpreted value (`press`, `release`, `repeat`, etc.)
-- decoded Tartarus `control_id` / `trigger`
-- mapped `logical_key` if known
-
-Stop with `Ctrl+C`.
-
-This is the most useful command when authoring or debugging bindings.
 
 ---
 
@@ -299,24 +206,6 @@ If signaling fails with permission errors, it suggests running with `sudo`.
 
 ---
 
-### `doctor`
-
-Runs an environment checklist and prints `[OK]` / `[FAIL]` lines.
-
-```bash
-tartarusctl doctor
-```
-
-Checks include:
-
-- config file exists at resolved path,
-- Tartarus devices found and each path is readable,
-- `/dev/uinput` exists,
-- `/dev/uinput` is readable/writable,
-- daemon running (`pgrep tartarusd`).
-
-`doctor` is the best first step when the daemon is not behaving as expected.
-
 ## Typical Workflows
 
 ### First-time setup
@@ -324,27 +213,14 @@ Checks include:
 ```bash
 tartarusctl init-config
 tartarusctl validate
-tartarusctl doctor
+tartarusctl status
 ```
 
 ### Validate and inspect a new mapping
 
 ```bash
-tartarusctl lookup-keycode leftctrl
 tartarusctl validate
 tartarusctl lookup base main_05
-```
-
-### Hardware troubleshooting
-
-```bash
-# First, find which event node belongs to the Tartarus
-tartarusctl list-input-devices
-tartarusctl find-tartarus
-
-# Then inspect and monitor that specific node (replace eventX with the actual number)
-tartarusctl inspect-device /dev/input/eventX
-tartarusctl monitor-device /dev/input/eventX
 ```
 
 ### Reload live daemon config
@@ -370,3 +246,10 @@ tartarusctl status
 - `quit` assumes process name matching via `pgrep tartarusd`.
 - Device matching for Tartarus is name-based from sysfs metadata.
 - Most command failures are reported as user-facing text lines; some lower-level errors can still bubble up as process errors.
+
+## Debug Commands (Not in Usage Output)
+
+These commands are still available for low-level troubleshooting, but they are intentionally hidden from the default usage list:
+
+- `tartarusctl inspect-device <event_path>` — prints detailed metadata for one event node.
+- `tartarusctl monitor-device <event_path>` — streams raw input events from one event node.
