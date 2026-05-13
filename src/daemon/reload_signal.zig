@@ -16,6 +16,6 @@ pub fn consumeReloadRequest() bool {
     return reload_requested.swap(false, .acq_rel);
 }
 
-fn handleSignal(_: c_int) callconv(.c) void {
+fn handleSignal(_: std.posix.SIG) callconv(.c) void {
     reload_requested.store(true, .release);
 }

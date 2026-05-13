@@ -1,15 +1,30 @@
 const std = @import("std");
 
 pub fn configExists(path: []const u8) bool {
-    std.fs.cwd().access(path, .{}) catch return false;
+    const fd = std.posix.openat(std.os.linux.AT.FDCWD, path, .{ .CLOEXEC = true }, 0) catch return false;
+    defer _ = std.c.close(fd);
     return true;
 }
 
 pub fn readConfigFileAlloc(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
-    const file = try std.fs.openFileAbsolute(path, .{ .mode = .read_only });
-    defer file.close();
+    const fd = try std.posix.openat(std.os.linux.AT.FDCWD, path, .{ .CLOEXEC = true }, 0);
+    defer _ = std.c.close(fd);
 
-    return try file.readToEndAlloc(allocator, 1024 * 1024);
+    const buffer = try allocator.alloc(u8, 1024 * 1024);
+    errdefer allocator.free(buffer);
+
+    var len: usize = 0;
+    while (true) {
+        if (len == buffer.len) return error.FileTooBig;
+
+        const read_len = try std.posix.read(fd, buffer[len..]);
+        if (read_len == 0) break;
+        len += read_len;
+    }
+
+    const contents = try allocator.dupe(u8, buffer[0..len]);
+    allocator.free(buffer);
+    return contents;
 }
 
 pub fn validateConfigText(contents: []const u8) !void {

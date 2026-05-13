@@ -1,8 +1,8 @@
-# tartarusd setup without sudo
+# Setting up `tartarusd` without sudo
 
 This guide sets up `tartarusd` so it can run as a normal user, without `sudo`, by granting access to:
 
-* the Razer Tartarus input device under `/dev/input/event*`
+* the Tartarus input device under `/dev/input/event*`
 * `/dev/uinput` for virtual keyboard injection
 
 The approach uses:
@@ -18,11 +18,9 @@ The approach uses:
 1. **Read and grab the Tartarus input device** via evdev.
 2. **Create and write to a virtual keyboard** via `/dev/uinput`.
 
-By default, both usually require elevated privileges. Instead of running the app with `sudo`, this setup grants access only to the devices and users you choose.
+By default, both usually require elevated privileges. Instead of running the daemon with `sudo`, this setup grants access only to the devices and users you choose.
 
 ## 1. Create the `tartarusd` group
-
-Run:
 
 ```bash
 sudo groupadd --system tartarusd
@@ -31,8 +29,6 @@ sudo groupadd --system tartarusd
 If the group already exists, that is fine.
 
 ## 2. Add your user to the group
-
-Run:
 
 ```bash
 sudo usermod -aG tartarusd "$USER"
@@ -64,39 +60,59 @@ KERNEL=="uinput", GROUP="tartarusd", MODE="0660"
 
 This gives members of the `tartarusd` group read/write access to `/dev/uinput`.
 
-## 4. Create a udev rule for the Tartarus input device
+## 4. Find your device vendor and product IDs
 
-Your Tartarus vendor/product IDs are:
+Before writing the input device udev rule, you need to find the vendor and product IDs for your specific Tartarus model. Run:
 
-* vendor: `1532`
-* product: `022b`
+```bash
+tartarusctl list-input-devices
+tartarusctl find-tartarus
+```
 
-Create this file:
+Then inspect the device node it reports (replacing `eventX` with the actual number):
+
+```bash
+tartarusctl inspect-device /dev/input/eventX
+```
+
+This prints the vendor and product IDs. Alternatively, use `udevadm`:
+
+```bash
+udevadm info -a -n /dev/input/eventX | grep -E 'idVendor|idProduct'
+```
+
+For reference, the Razer Tartarus V2 uses vendor `1532` and product `022b`. Other Tartarus models may use different product IDs.
+
+## 5. Create a udev rule for the Tartarus input device
+
+Once you have the vendor and product IDs, create this file:
 
 ```text
 /etc/udev/rules.d/81-tartarusd-input.rules
 ```
 
-Put this in it:
+Put this in it, substituting your actual IDs:
+
+```udev
+SUBSYSTEM=="input", KERNEL=="event*", ATTRS{idVendor}=="<vendor_id>", ATTRS{idProduct}=="<product_id>", GROUP="tartarusd", MODE="0660"
+```
+
+For example, for the Razer Tartarus V2:
 
 ```udev
 SUBSYSTEM=="input", KERNEL=="event*", ATTRS{idVendor}=="1532", ATTRS{idProduct}=="022b", GROUP="tartarusd", MODE="0660"
 ```
 
-This grants the `tartarusd` group access only to the matching Razer Tartarus input device nodes.
+This grants the `tartarusd` group access only to the matching Tartarus input device nodes.
 
-## 5. Reload udev rules
-
-Run:
+## 6. Reload udev rules
 
 ```bash
 sudo udevadm control --reload
 sudo udevadm trigger
 ```
 
-## 6. Make sure the `uinput` module is loaded
-
-Run:
+## 7. Make sure the `uinput` module is loaded
 
 ```bash
 sudo modprobe uinput
@@ -120,16 +136,20 @@ with:
 uinput
 ```
 
-## 7. Verify device permissions
+## 8. Verify device permissions
 
-Check:
+First find the event node for your Tartarus:
+
+```bash
+tartarusctl find-tartarus
+```
+
+Then check the permissions on that node and on `/dev/uinput`:
 
 ```bash
 ls -l /dev/uinput
-ls -l /dev/input/event7
+ls -l /dev/input/eventX   # replace eventX with your actual node
 ```
-
-Replace `/dev/input/event7` if your Tartarus ends up on a different event node.
 
 What you want to see:
 
@@ -140,25 +160,25 @@ Example target shape:
 
 ```text
 crw-rw---- 1 root tartarusd ... /dev/uinput
-crw-rw---- 1 root tartarusd ... /dev/input/event7
+crw-rw---- 1 root tartarusd ... /dev/input/eventX
 ```
 
-## 8. Re-log if needed
+## 9. Re-log if needed
 
 If permissions look right but the daemon still cannot open the devices, log out and log back in again to ensure your session has the updated group membership.
 
-## 9. Test without sudo
+## 10. Test without sudo
 
-From the repo root, try:
+Start the daemon:
 
 ```bash
-zig build run-daemon
+tartarusd
 ```
 
-And in another terminal:
+In another terminal, check its status:
 
 ```bash
-zig build run-cli -- status
+tartarusctl status
 ```
 
 If everything is set up correctly, `tartarusd` should:
@@ -168,23 +188,21 @@ If everything is set up correctly, `tartarusd` should:
 * grab the device
 * create the virtual keyboard through `/dev/uinput`
 
-## 10. If the Tartarus node is not obvious
-
-Use:
+## 11. If the Tartarus node is not obvious
 
 ```bash
-zig build run-cli -- list-input-devices
-zig build run-cli -- find-tartarus
-zig build run-cli -- inspect-device /dev/input/event7
+tartarusctl list-input-devices
+tartarusctl find-tartarus
+tartarusctl inspect-device /dev/input/eventX
 ```
 
 And for deeper hardware attribute inspection:
 
 ```bash
-udevadm info -a -n /dev/input/event7
+udevadm info -a -n /dev/input/eventX
 ```
 
-This is useful if you ever want to refine the udev rule further.
+This is useful if you need to refine the udev rule or confirm device attributes.
 
 ## Troubleshooting
 
@@ -195,8 +213,8 @@ Most common cause: another `tartarusd` instance is already running.
 Check with:
 
 ```bash
-zig build run-cli -- status
-zig build run-cli -- quit
+tartarusctl status
+tartarusctl quit
 ```
 
 Or:
@@ -225,7 +243,8 @@ Make sure:
 Check the Tartarus event node permissions:
 
 ```bash
-ls -l /dev/input/event7
+tartarusctl find-tartarus
+ls -l /dev/input/eventX   # replace eventX with your actual node
 ```
 
 Make sure the matching udev rule applied and the device node has group `tartarusd`.

@@ -38,7 +38,7 @@ pub fn shutdownOutput() void {
     }
 }
 
-pub fn executeAction(allocator: std.mem.Allocator, action: model.Action) !void {
+pub fn executeAction(allocator: std.mem.Allocator, io: std.Io, action: model.Action) !void {
     switch (action) {
         .key => |a| {
             try executeKeyAction(a);
@@ -47,10 +47,10 @@ pub fn executeAction(allocator: std.mem.Allocator, action: model.Action) !void {
             try executeComboAction(allocator, a);
         },
         .exec => |a| {
-            try executeProgramAsUser(allocator, a.program, a.args);
+            try executeProgramAsUser(allocator, io, a.program, a.args);
         },
         .command => |a| {
-            try executeShellCommandAsUser(allocator, a.shell, a.detach);
+            try executeShellCommandAsUser(allocator, io, a.shell, a.detach);
         },
         .layer => |a| {
             std.debug.print(
@@ -128,6 +128,7 @@ fn mapKeyNameToLinuxCode(name: []const u8) ?u16 {
 
 fn executeProgramAsUser(
     allocator: std.mem.Allocator,
+    io: std.Io,
     program: []const u8,
     args: []const []const u8,
 ) !void {
@@ -157,20 +158,20 @@ fn executeProgramAsUser(
             return;
         }
 
-        var child = std.process.Child.init(argv, allocator);
-        child.stdin_behavior = .Ignore;
-        child.stdout_behavior = .Ignore;
-        child.stderr_behavior = .Ignore;
-        child.uid = ctx.uid;
-        child.gid = ctx.gid;
-        child.cwd = ctx.home;
-
         var env = try buildUserEnv(allocator, ctx);
         defer env.deinit();
 
-        child.env_map = &env;
-
-        const term = try child.spawnAndWait();
+        var child = try std.process.spawn(io, .{
+            .argv = argv,
+            .stdin = .ignore,
+            .stdout = .ignore,
+            .stderr = .ignore,
+            .uid = ctx.uid,
+            .gid = ctx.gid,
+            .cwd = .{ .path = ctx.home },
+            .environ_map = &env,
+        });
+        const term = try child.wait(io);
         std.debug.print("program exit: {any}\n", .{term});
         return;
     }
@@ -191,16 +192,19 @@ fn executeProgramAsUser(
         return;
     }
 
-    var child = std.process.Child.init(argv, allocator);
-    child.stdin_behavior = .Ignore;
-    child.stdout_behavior = .Ignore;
-    child.stderr_behavior = .Ignore;
-    const term = try child.spawnAndWait();
+    var child = try std.process.spawn(io, .{
+        .argv = argv,
+        .stdin = .ignore,
+        .stdout = .ignore,
+        .stderr = .ignore,
+    });
+    const term = try child.wait(io);
     std.debug.print("program exit: {any}\n", .{term});
 }
 
 fn executeShellCommandAsUser(
     allocator: std.mem.Allocator,
+    io: std.Io,
     shell_command: []const u8,
     detach: bool,
 ) !void {
@@ -218,30 +222,30 @@ fn executeShellCommandAsUser(
             return;
         }
 
-        var child = std.process.Child.init(
-            &.{ "/bin/sh", "-c", shell_command },
-            allocator,
-        );
-        child.stdin_behavior = .Ignore;
-        child.stdout_behavior = .Ignore;
-        child.stderr_behavior = .Ignore;
-
-        child.uid = ctx.uid;
-        child.gid = ctx.gid;
-        child.cwd = ctx.home;
-
         var env = try buildUserEnv(allocator, ctx);
         defer env.deinit();
 
-        child.env_map = &env;
+        const argv: []const []const u8 = if (detach)
+            &[_][]const u8{ "setsid", "/bin/sh", "-c", shell_command }
+        else
+            &[_][]const u8{ "/bin/sh", "-c", shell_command };
+
+        var child = try std.process.spawn(io, .{
+            .argv = argv,
+            .stdin = .ignore,
+            .stdout = .ignore,
+            .stderr = .ignore,
+            .uid = ctx.uid,
+            .gid = ctx.gid,
+            .cwd = .{ .path = ctx.home },
+            .environ_map = &env,
+        });
 
         if (detach) {
-            child.argv = &.{ "setsid", "/bin/sh", "-c", shell_command };
-            try child.spawn();
             return;
         }
 
-        const term = try child.spawnAndWait();
+        const term = try child.wait(io);
         std.debug.print("command exit: {any}\n", .{term});
         return;
     }
@@ -256,21 +260,23 @@ fn executeShellCommandAsUser(
         return;
     }
 
-    var child = std.process.Child.init(
-        &.{ "/bin/sh", "-c", shell_command },
-        allocator,
-    );
-    child.stdin_behavior = .Ignore;
-    child.stdout_behavior = .Ignore;
-    child.stderr_behavior = .Ignore;
+    const argv: []const []const u8 = if (detach)
+        &[_][]const u8{ "setsid", "/bin/sh", "-c", shell_command }
+    else
+        &[_][]const u8{ "/bin/sh", "-c", shell_command };
+
+    var child = try std.process.spawn(io, .{
+        .argv = argv,
+        .stdin = .ignore,
+        .stdout = .ignore,
+        .stderr = .ignore,
+    });
 
     if (detach) {
-        child.argv = &.{ "setsid", "/bin/sh", "-c", shell_command };
-        try child.spawn();
         return;
     }
 
-    const term = try child.spawnAndWait();
+    const term = try child.wait(io);
     std.debug.print("command exit: {any}\n", .{term});
 }
 
@@ -290,8 +296,8 @@ fn buildArgv(
 fn buildUserEnv(
     allocator: std.mem.Allocator,
     ctx: user_context.UserContext,
-) !std.process.EnvMap {
-    var env = std.process.EnvMap.init(allocator);
+) !std.process.Environ.Map {
+    var env = std.process.Environ.Map.init(allocator);
 
     try env.put("HOME", ctx.home);
     try env.put("USER", ctx.username);
@@ -314,7 +320,7 @@ fn buildUserEnv(
     try copyEnvIfPresent(&env, "SHELL");
     try copyEnvIfPresent(&env, "TERM");
 
-    const runtime_dir = if (std.posix.getenv("XDG_RUNTIME_DIR")) |value|
+    const runtime_dir = if (getEnv("XDG_RUNTIME_DIR")) |value|
         try allocator.dupe(u8, value)
     else
         try std.fmt.allocPrint(allocator, "/run/user/{}", .{ctx.uid});
@@ -322,7 +328,7 @@ fn buildUserEnv(
 
     try env.put("XDG_RUNTIME_DIR", runtime_dir);
 
-    const dbus_addr = if (std.posix.getenv("DBUS_SESSION_BUS_ADDRESS")) |value|
+    const dbus_addr = if (getEnv("DBUS_SESSION_BUS_ADDRESS")) |value|
         try allocator.dupe(u8, value)
     else
         try std.fmt.allocPrint(allocator, "unix:path={s}/bus", .{runtime_dir});
@@ -333,8 +339,13 @@ fn buildUserEnv(
     return env;
 }
 
-fn copyEnvIfPresent(env: *std.process.EnvMap, key: []const u8) !void {
-    if (std.posix.getenv(key)) |value| {
+fn copyEnvIfPresent(env: *std.process.Environ.Map, comptime key: [:0]const u8) !void {
+    if (getEnv(key)) |value| {
         try env.put(key, value);
     }
+}
+
+fn getEnv(comptime key: [:0]const u8) ?[]const u8 {
+    const value = std.c.getenv(key) orelse return null;
+    return std.mem.span(value);
 }

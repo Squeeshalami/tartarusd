@@ -5,6 +5,7 @@ const executor = @import("daemon_support").executor;
 
 pub fn handleEvent(
     allocator: std.mem.Allocator,
+    io: std.Io,
     state: *state_mod.State,
     event: model.InputEvent,
 ) !void {
@@ -37,23 +38,23 @@ pub fn handleEvent(
             var key_action = a;
             key_action.trigger = event.trigger;
 
-            try executor.executeAction(allocator, .{
+            try executor.executeAction(allocator, io, .{
                 .key = key_action,
             });
         },
         .combo => |a| {
             if (event.trigger != .press) return;
-            try executor.executeAction(allocator, .{
+            try executor.executeAction(allocator, io, .{
                 .combo = a,
             });
         },
         .exec => {
             if (event.trigger != .press) return;
-            try executor.executeAction(allocator, action);
+            try executor.executeAction(allocator, io, action);
         },
         .command => {
             if (event.trigger != .press) return;
-            try executor.executeAction(allocator, action);
+            try executor.executeAction(allocator, io, action);
         },
         .layer => |a| {
             switch (a.mode) {
@@ -73,7 +74,7 @@ pub fn handleEvent(
                     }
                 },
             }
-            try executor.executeAction(allocator, action);
+            try executor.executeAction(allocator, io, action);
         },
     }
 }

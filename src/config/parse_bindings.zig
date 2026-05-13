@@ -45,7 +45,7 @@ pub fn parseConfigModelFromTextDetailed(
 ) !ParseDetailedResult {
     var default_layer: ?[]u8 = null;
 
-    var layers = std.ArrayListUnmanaged(model.Layer){};
+    var layers: std.ArrayListUnmanaged(model.Layer) = .empty;
     var should_cleanup = true;
     defer {
         if (should_cleanup) {
@@ -60,7 +60,7 @@ pub fn parseConfigModelFromTextDetailed(
     }
 
     var current_layer_name: ?[]u8 = null;
-    var current_bindings = std.ArrayListUnmanaged(model.Binding){};
+    var current_bindings: std.ArrayListUnmanaged(model.Binding) = .empty;
 
     defer {
         if (current_layer_name) |name| allocator.free(name);
@@ -216,7 +216,7 @@ fn flushCurrentLayer(
     });
 
     current_layer_name.* = null;
-    current_bindings.* = .{};
+    current_bindings.* = .empty;
 }
 
 fn isLayerHeader(line: []const u8) bool {
@@ -444,7 +444,7 @@ fn parseStringArray(
     const inner = std.mem.trim(u8, value[1 .. value.len - 1], " \t");
     if (inner.len == 0) return try allocator.alloc([]const u8, 0);
 
-    var items = std.ArrayListUnmanaged([]const u8){};
+    var items: std.ArrayListUnmanaged([]const u8) = .empty;
     errdefer {
         freeStringSlice(allocator, items.items);
         items.deinit(allocator);
