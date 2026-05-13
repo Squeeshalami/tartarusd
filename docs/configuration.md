@@ -1,6 +1,6 @@
 # Configuring `tartarus.toml`
 
-This document describes how to write a valid configuration for **tartarusd**: where the file lives, what structure the parser expects, and every option you can use in bindings. It matches the on-disk example at `examples/tartarus.toml` and the file created by `tartarusctl init-config`.
+This document describes how to write a valid configuration for **tartarusd**: where the file lives, what structure the parser expects, and every option available in bindings. The annotated example at `examples/tartarus.toml` covers the same content and is a useful starting point.
 
 ## Where the file goes
 
@@ -8,7 +8,7 @@ The daemon and CLI look for:
 
 `$HOME/.config/tartarusd/tartarus.toml`
 
-If you use `sudo` to run a command, the tools prefer the home directory of `SUDO_USER` when that variable is set (so paths stay tied to your user account).
+If `sudo` is used to invoke a command, the tools prefer the home directory of `SUDO_USER` when that variable is set, so config paths remain tied to the original user's account rather than root's.
 
 ## Creating a starting file
 
@@ -16,7 +16,7 @@ If you use `sudo` to run a command, the tools prefer the home directory of `SUDO
 tartarusctl init-config
 ```
 
-This creates the config directory and, if the file is missing, writes a default config (same content as `src/config/template.zig`, also mirrored in `examples/tartarus.toml`).
+This creates the config directory and, if the file is missing, writes a default config. The generated file has the same content as `examples/tartarus.toml`.
 
 Check that a file parses:
 
@@ -108,7 +108,7 @@ Each binding line looks like:
 | D-pad | `dpad_up`, `dpad_left`, `dpad_right`, `dpad_down` |
 | Thumb | `thumb_button_1` |
 
-You can confirm a key name for your layout with `tartarusctl` monitoring tools while testing.
+Key names can be confirmed by monitoring raw device events with `tartarusctl monitor-device` while pressing buttons on the Tartarus.
 
 **Lookup helper:**
 
@@ -155,7 +155,7 @@ main_03 = { type = "exec", program = "ghostty", args = [] }
 | `program` | yes      | Path or executable name resolved like `execve` (first segment is the binary). |
 | `args`    | no       | Array of extra arguments. If omitted, it defaults to an empty list (`[]`). |
 
-**Runtime:** Only on **press**. When the daemon needs to drop privileges to your login user, see runtime logs for which user the child uses.
+**Runtime:** Only on **press**. The daemon spawns the child process under the user identified by `SUDO_USER` when set (i.e. the user who invoked sudo), otherwise under the user running the daemon. Check runtime logs if a launched program is not running under the expected user.
 
 ### `command` — run a string via `/bin/sh -c`
 

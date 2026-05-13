@@ -18,8 +18,8 @@ fn printUsage() void {
     , .{});
 }
 
-fn checkExistingDaemon(allocator: std.mem.Allocator) !void {
-    const existing_pids = try process_check.findDaemonPids(allocator);
+fn checkExistingDaemon(allocator: std.mem.Allocator, io: std.Io) !void {
+    const existing_pids = try process_check.findDaemonPids(allocator, io);
     defer allocator.free(existing_pids);
 
     if (existing_pids.len > 1) {
@@ -34,13 +34,9 @@ fn checkExistingDaemon(allocator: std.mem.Allocator) !void {
     }
 }
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
-
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.gpa;
+    const args = try init.minimal.args.toSlice(init.arena.allocator());
 
     var dry_run = false;
     var verbose = false;
@@ -89,7 +85,7 @@ pub fn main() !void {
     };
     defer config.free.freeConfigModel(allocator, current_cfg);
 
-    checkExistingDaemon(allocator) catch |err| {
+    checkExistingDaemon(allocator, init.io) catch |err| {
         if (err == error.DaemonAlreadyRunning) {
             return;
         }
@@ -109,5 +105,5 @@ pub fn main() !void {
     log.info("mode: live\n", .{});
     log.info("dry-run: {}\n", .{dry_run});
 
-    try run_live.runLiveEventLoop(allocator, &current_cfg, &state);
+    try run_live.runLiveEventLoop(allocator, init.io, &current_cfg, &state);
 }

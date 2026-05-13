@@ -86,7 +86,7 @@ pub fn findTartarusEventPaths(allocator: std.mem.Allocator) ![][]u8 {
     const devices = try @import("input_list.zig").listEventDevicePaths(allocator);
     defer @import("input_list.zig").freeDeviceEntries(allocator, devices);
 
-    var matches = std.ArrayListUnmanaged([]u8){};
+    var matches: std.ArrayListUnmanaged([]u8) = .empty;
     errdefer {
         for (matches.items) |path| allocator.free(path);
         matches.deinit(allocator);
@@ -152,15 +152,18 @@ fn readDeviceNameFromEventName(allocator: std.mem.Allocator, event_name: []const
 }
 
 fn readDeviceSymlinkTarget(allocator: std.mem.Allocator, sysfs_event_dir: []const u8) ![]u8 {
-    const device_link = try std.fmt.allocPrint(
+    const device_link = try std.fmt.allocPrintSentinel(
         allocator,
         "{s}/device",
         .{sysfs_event_dir},
+        0,
     );
     defer allocator.free(device_link);
 
     var buf: [std.fs.max_path_bytes]u8 = undefined;
-    const target = try std.posix.readlink(device_link, &buf);
+    const target_len = std.c.readlink(device_link, &buf, buf.len);
+    if (target_len < 0) return error.FileNotFound;
+    const target = buf[0..@intCast(target_len)];
 
     return try std.fs.path.resolve(allocator, &.{ sysfs_event_dir, target });
 }
@@ -181,10 +184,12 @@ fn readMaybeTrimmedFile(
 }
 
 fn readTrimmedFileAbsolute(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
-    const file = try std.fs.openFileAbsolute(path, .{ .mode = .read_only });
-    defer file.close();
+    const fd = try std.posix.openat(std.os.linux.AT.FDCWD, path, .{ .CLOEXEC = true }, 0);
+    defer _ = std.c.close(fd);
 
-    const contents = try file.readToEndAlloc(allocator, 4096);
+    var buffer: [4096]u8 = undefined;
+    const len = try std.posix.read(fd, &buffer);
+    const contents = try allocator.dupe(u8, buffer[0..len]);
     defer allocator.free(contents);
 
     return try allocator.dupe(u8, std.mem.trim(u8, contents, " \t\r\n"));

@@ -1,6 +1,6 @@
 # `tartarusctl` Command Guide
 
-`tartarusctl` is the CLI companion for `tartarusd`. It focuses on:
+`tartarusctl` is the CLI companion for `tartarusd`. It covers:
 
 - locating and validating config,
 - inspecting input devices,
@@ -8,8 +8,6 @@
 - sending reload signals,
 - stopping daemon processes,
 - debugging key mapping behavior.
-
-This document reflects the current implementation in `src/cli`.
 
 ## Quick Start
 
@@ -340,10 +338,13 @@ tartarusctl lookup base main_05
 ### Hardware troubleshooting
 
 ```bash
+# First, find which event node belongs to the Tartarus
 tartarusctl list-input-devices
 tartarusctl find-tartarus
-tartarusctl inspect-device /dev/input/event7
-tartarusctl monitor-device /dev/input/event7
+
+# Then inspect and monitor that specific node (replace eventX with the actual number)
+tartarusctl inspect-device /dev/input/eventX
+tartarusctl monitor-device /dev/input/eventX
 ```
 
 ### Reload live daemon config

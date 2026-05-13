@@ -52,11 +52,11 @@ pub fn handleConfigPath(config_path: []const u8) void {
     std.debug.print("{s}\n", .{config_path});
 }
 
-pub fn handleStatus(allocator: std.mem.Allocator, config_path: []const u8) !void {
+pub fn handleStatus(allocator: std.mem.Allocator, io: std.Io, config_path: []const u8) !void {
     std.debug.print("{s} status\n", .{AppNames.cli});
     std.debug.print("config path: {s}\n", .{config_path});
 
-    const pids = daemon_control.findDaemonPids(allocator) catch |err| {
+    const pids = daemon_control.findDaemonPids(allocator, io) catch |err| {
         std.debug.print("daemon: status check failed: {s}\n", .{@errorName(err)});
         return;
     };
@@ -289,8 +289,8 @@ pub fn handleLookupKeycode(args: []const []const u8) void {
     std.debug.print("keycode: {s} -> {}\n", .{ name, code });
 }
 
-pub fn handleReload(allocator: std.mem.Allocator) !void {
-    const pids = daemon_control.findDaemonPids(allocator) catch |err| {
+pub fn handleReload(allocator: std.mem.Allocator, io: std.Io) !void {
+    const pids = daemon_control.findDaemonPids(allocator, io) catch |err| {
         std.debug.print("failed to find tartarusd process: {s}\n", .{@errorName(err)});
         return;
     };
@@ -322,8 +322,8 @@ pub fn handleReload(allocator: std.mem.Allocator) !void {
     std.debug.print(")\n", .{});
 }
 
-pub fn handleQuit(allocator: std.mem.Allocator) !void {
-    const pids = daemon_control.findDaemonPids(allocator) catch |err| {
+pub fn handleQuit(allocator: std.mem.Allocator, io: std.Io) !void {
+    const pids = daemon_control.findDaemonPids(allocator, io) catch |err| {
         std.debug.print("failed to find tartarusd process: {s}\n", .{@errorName(err)});
         return;
     };
@@ -355,7 +355,7 @@ pub fn handleQuit(allocator: std.mem.Allocator) !void {
     std.debug.print(")\n", .{});
 }
 
-pub fn handleDoctor(allocator: std.mem.Allocator, config_path: []const u8) !void {
+pub fn handleDoctor(allocator: std.mem.Allocator, io: std.Io, config_path: []const u8) !void {
     std.debug.print("{s} doctor\n\n", .{AppNames.cli});
 
     // Config file
@@ -381,10 +381,10 @@ pub fn handleDoctor(allocator: std.mem.Allocator, config_path: []const u8) !void
         printCheck(true, "Tartarus devices found", "");
         for (device_paths) |device_path| {
             const readable = blk: {
-                const file = std.fs.openFileAbsolute(device_path, .{ .mode = .read_only }) catch {
+                const fd = std.posix.openat(std.os.linux.AT.FDCWD, device_path, .{ .CLOEXEC = true }, 0) catch {
                     break :blk false;
                 };
-                file.close();
+                _ = std.c.close(fd);
                 break :blk true;
             };
 
@@ -397,7 +397,7 @@ pub fn handleDoctor(allocator: std.mem.Allocator, config_path: []const u8) !void
     const uinput_path = "/dev/uinput";
 
     const uinput_rw = blk: {
-        const file = std.fs.openFileAbsolute(uinput_path, .{ .mode = .read_write }) catch |err| switch (err) {
+        const fd = std.posix.openat(std.os.linux.AT.FDCWD, uinput_path, .{ .ACCMODE = .RDWR, .CLOEXEC = true }, 0) catch |err| switch (err) {
             error.FileNotFound => {
                 printCheck(false, "/dev/uinput exists", uinput_path);
                 break :blk false;
@@ -411,7 +411,7 @@ pub fn handleDoctor(allocator: std.mem.Allocator, config_path: []const u8) !void
                 break :blk false;
             },
         };
-        file.close();
+        _ = std.c.close(fd);
         printCheck(true, "/dev/uinput exists", uinput_path);
         break :blk true;
     };
@@ -419,7 +419,7 @@ pub fn handleDoctor(allocator: std.mem.Allocator, config_path: []const u8) !void
     printCheck(uinput_rw, "/dev/uinput readable/writable", "");
 
     // Daemon running
-    const pids = daemon_control.findDaemonPids(allocator) catch |err| {
+    const pids = daemon_control.findDaemonPids(allocator, io) catch |err| {
         std.debug.print("[FAIL] daemon status check failed: {s}\n", .{@errorName(err)});
         return;
     };

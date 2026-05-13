@@ -10,7 +10,7 @@ const linux = @import("linux");
 
 const OpenDevice = struct {
     path: []u8,
-    file: std.fs.File,
+    fd: std.posix.fd_t,
 };
 
 fn openTartarusDevices(allocator: std.mem.Allocator) ![]OpenDevice {
@@ -29,16 +29,16 @@ fn openTartarusDevices(allocator: std.mem.Allocator) ![]OpenDevice {
     errdefer {
         var i: usize = 0;
         while (i < opened) : (i += 1) {
-            devices[i].file.close();
+            _ = std.c.close(devices[i].fd);
             allocator.free(devices[i].path);
         }
     }
 
     for (paths, 0..) |path, idx| {
-        const file = try device.evdev.openEventDevice(path);
+        const fd = try device.evdev.openEventDevice(path);
         devices[idx] = .{
             .path = path,
-            .file = file,
+            .fd = fd,
         };
         opened += 1;
     }
@@ -49,7 +49,7 @@ fn openTartarusDevices(allocator: std.mem.Allocator) ![]OpenDevice {
 
 fn closeOpenDevices(allocator: std.mem.Allocator, devices: []OpenDevice) void {
     for (devices) |dev| {
-        dev.file.close();
+        _ = std.c.close(dev.fd);
         allocator.free(dev.path);
     }
     allocator.free(devices);
@@ -60,19 +60,19 @@ fn grabAllDevices(devices: []OpenDevice) !void {
     errdefer {
         var i: usize = 0;
         while (i < grabbed) : (i += 1) {
-            device.evdev.ungrabDevice(&devices[i].file);
+            device.evdev.ungrabDevice(devices[i].fd);
         }
     }
 
     for (devices) |*dev| {
-        try device.evdev.grabDevice(&dev.file);
+        try device.evdev.grabDevice(dev.fd);
         grabbed += 1;
     }
 }
 
 fn ungrabAllDevices(devices: []OpenDevice) void {
     for (devices) |*dev| {
-        device.evdev.ungrabDevice(&dev.file);
+        device.evdev.ungrabDevice(dev.fd);
     }
 }
 
@@ -86,7 +86,7 @@ fn waitForReadableDeviceIndex(
 
     for (devices, 0..) |dev, i| {
         pollfds[i] = .{
-            .fd = dev.file.handle,
+            .fd = dev.fd,
             .events = std.posix.POLL.IN,
             .revents = 0,
         };
@@ -107,20 +107,16 @@ fn waitForReadableDeviceIndex(
 /// Main event loop: opens and polls all discovered Tartarus event devices.
 pub fn runLiveEventLoop(
     allocator: std.mem.Allocator,
+    io: std.Io,
     current_cfg: *model.ConfigModel,
     state: *state_mod.State,
 ) !void {
-    var devices = try openTartarusDevices(allocator);
+    const devices = try openTartarusDevices(allocator);
     defer closeOpenDevices(allocator, devices);
 
     grabAllDevices(devices) catch |err| {
-        switch (err) {
-            error.IoctlGrabFailed => {
-                log.info("failed to grab Tartarus devices; another tartarusd instance may already be running\n", .{});
-                return err;
-            },
-            else => return err,
-        }
+        log.info("failed to grab Tartarus devices; another tartarusd instance may already be running\n", .{});
+        return err;
     };
     defer ungrabAllDevices(devices);
 
@@ -166,7 +162,7 @@ pub fn runLiveEventLoop(
         if (ready_index == null) continue;
 
         const idx = ready_index.?;
-        const physical = try device.evdev.readPhysicalEvent(&devices[idx].file) orelse continue;
+        const physical = try device.evdev.readPhysicalEvent(devices[idx].fd) orelse continue;
 
         log.verbose(
             "physical event: device={s} control={s} trigger={s} active_layer_before={s}\n",
@@ -183,7 +179,7 @@ pub fn runLiveEventLoop(
             .{ logical.logical_key, @tagName(logical.trigger) },
         );
 
-        handler.handleEvent(allocator, state, logical) catch |err| {
+        handler.handleEvent(allocator, io, state, logical) catch |err| {
             log.verbose("  handler error: {s}\n", .{@errorName(err)});
             continue;
         };

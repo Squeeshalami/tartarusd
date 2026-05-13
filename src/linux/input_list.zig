@@ -6,10 +6,10 @@ pub const InputDeviceEntry = struct {
 };
 
 pub fn listEventDevicePaths(allocator: std.mem.Allocator) ![]InputDeviceEntry {
-    var dir = try std.fs.openDirAbsolute("/dev/input", .{ .iterate = true });
-    defer dir.close();
+    const dir = std.c.opendir("/dev/input") orelse return error.FileNotFound;
+    defer _ = std.c.closedir(dir);
 
-    var entries = std.ArrayListUnmanaged(InputDeviceEntry){};
+    var entries: std.ArrayListUnmanaged(InputDeviceEntry) = .empty;
     errdefer {
         for (entries.items) |entry| {
             allocator.free(entry.path);
@@ -18,15 +18,16 @@ pub fn listEventDevicePaths(allocator: std.mem.Allocator) ![]InputDeviceEntry {
         entries.deinit(allocator);
     }
 
-    var iter = dir.iterate();
-    while (try iter.next()) |entry| {
-        if (entry.kind != .file and entry.kind != .character_device) continue;
-        if (!std.mem.startsWith(u8, entry.name, "event")) continue;
+    while (std.c.readdir(dir)) |entry| {
+        if (entry.type != std.c.DT.REG and entry.type != std.c.DT.CHR) continue;
 
-        const full_path = try std.fmt.allocPrint(allocator, "/dev/input/{s}", .{entry.name});
+        const name = std.mem.sliceTo(&entry.name, 0);
+        if (!std.mem.startsWith(u8, name, "event")) continue;
+
+        const full_path = try std.fmt.allocPrint(allocator, "/dev/input/{s}", .{name});
         errdefer allocator.free(full_path);
 
-        const device_name = readInputDeviceName(allocator, entry.name) catch |err| switch (err) {
+        const device_name = readInputDeviceName(allocator, name) catch |err| switch (err) {
             error.FileNotFound => try allocator.dupe(u8, "<unknown>"),
             else => return err,
         };
@@ -59,10 +60,12 @@ fn readInputDeviceName(allocator: std.mem.Allocator, event_name: []const u8) ![]
     );
     defer allocator.free(sysfs_path);
 
-    const file = try std.fs.openFileAbsolute(sysfs_path, .{ .mode = .read_only });
-    defer file.close();
+    const fd = try std.posix.openat(std.os.linux.AT.FDCWD, sysfs_path, .{ .CLOEXEC = true }, 0);
+    defer _ = std.c.close(fd);
 
-    const contents = try file.readToEndAlloc(allocator, 4096);
+    var buffer: [4096]u8 = undefined;
+    const len = try std.posix.read(fd, &buffer);
+    const contents = try allocator.dupe(u8, buffer[0..len]);
     defer allocator.free(contents);
 
     return try allocator.dupe(u8, std.mem.trim(u8, contents, " \t\r\n"));

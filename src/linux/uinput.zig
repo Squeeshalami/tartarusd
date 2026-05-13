@@ -13,11 +13,11 @@ pub const VirtualKeyboard = struct {
     fd: std.posix.fd_t,
 
     pub fn create() !VirtualKeyboard {
-        const fd = std.posix.open("/dev/uinput", .{ .ACCMODE = .RDWR }, 0) catch |err| switch (err) {
+        const fd = std.posix.openat(std.os.linux.AT.FDCWD, "/dev/uinput", .{ .ACCMODE = .RDWR }, 0) catch |err| switch (err) {
             error.FileNotFound => return error.UinputUnavailable,
             else => return err,
         };
-        errdefer std.posix.close(fd);
+        errdefer _ = std.c.close(fd);
 
         try ioctlSetInt(fd, c.UI_SET_EVBIT, c.EV_KEY);
         try ioctlSetInt(fd, c.UI_SET_EVBIT, c.EV_SYN);
@@ -87,14 +87,18 @@ pub const VirtualKeyboard = struct {
             return error.UinputCreateFailed;
         }
 
-        std.Thread.sleep(100 * std.time.ns_per_ms);
+        const setup_delay = std.c.timespec{
+            .sec = 0,
+            .nsec = 100 * std.time.ns_per_ms,
+        };
+        _ = std.c.nanosleep(&setup_delay, null);
 
         return .{ .fd = fd };
     }
 
     pub fn destroy(self: *VirtualKeyboard) void {
         _ = c.ioctl(self.fd, c.UI_DEV_DESTROY, @as(c_int, 0));
-        std.posix.close(self.fd);
+        _ = std.c.close(self.fd);
     }
 
     pub fn sendKey(self: *VirtualKeyboard, key_code: u16, pressed: bool) !void {
@@ -131,8 +135,10 @@ pub const VirtualKeyboard = struct {
         const bytes = std.mem.asBytes(&ev);
         var written: usize = 0;
         while (written < bytes.len) {
-            const amt = try std.posix.write(self.fd, bytes[written..]);
-            written += amt;
+            const amt = std.c.write(self.fd, bytes[written..].ptr, bytes.len - written);
+            if (amt < 0) return error.UinputWriteFailed;
+            if (amt == 0) return error.UinputWriteFailed;
+            written += @intCast(amt);
         }
     }
 };

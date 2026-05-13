@@ -21,29 +21,27 @@ const EV_KEY: u16 = 0x01;
 const EV_REL: u16 = 0x02;
 const REL_WHEEL: u16 = 0x08;
 
-pub fn openEventDevice(event_path: []const u8) !std.fs.File {
-    return try std.fs.openFileAbsolute(event_path, .{
-        .mode = .read_write,
-    });
+pub fn openEventDevice(event_path: []const u8) !std.posix.fd_t {
+    return try std.posix.openat(std.os.linux.AT.FDCWD, event_path, .{ .ACCMODE = .RDWR }, 0);
 }
 
-pub fn grabDevice(file: *std.fs.File) !void {
+pub fn grabDevice(fd: std.posix.fd_t) !void {
     var grab_on: c_int = 1;
-    const rc = std.posix.system.ioctl(file.handle, EVIOCGRAB, @intFromPtr(&grab_on));
+    const rc = std.posix.system.ioctl(fd, EVIOCGRAB, @intFromPtr(&grab_on));
     if (rc != 0) {
         return error.IoctlGrabFailed;
     }
 }
 
-pub fn ungrabDevice(file: *std.fs.File) void {
+pub fn ungrabDevice(fd: std.posix.fd_t) void {
     var grab_off: c_int = 0;
-    _ = std.posix.system.ioctl(file.handle, EVIOCGRAB, @intFromPtr(&grab_off));
+    _ = std.posix.system.ioctl(fd, EVIOCGRAB, @intFromPtr(&grab_off));
 }
 
-pub fn waitForReadable(file: *std.fs.File, timeout_ms: i32) !bool {
+pub fn waitForReadable(fd: std.posix.fd_t, timeout_ms: i32) !bool {
     var pollfds = [_]std.posix.pollfd{
         .{
-            .fd = file.handle,
+            .fd = fd,
             .events = std.posix.POLL.IN,
             .revents = 0,
         },
@@ -55,10 +53,10 @@ pub fn waitForReadable(file: *std.fs.File, timeout_ms: i32) !bool {
     return (pollfds[0].revents & std.posix.POLL.IN) != 0;
 }
 
-pub fn readPhysicalEvent(file: *std.fs.File) !?model.PhysicalInputEvent {
+pub fn readPhysicalEvent(fd: std.posix.fd_t) !?model.PhysicalInputEvent {
     while (true) {
         var buf: [@sizeOf(LinuxInputEvent)]u8 = undefined;
-        const bytes_read = try file.readAll(&buf);
+        const bytes_read = try std.posix.read(fd, &buf);
         if (bytes_read != buf.len) return error.ShortRead;
 
         const event: LinuxInputEvent = @bitCast(buf);

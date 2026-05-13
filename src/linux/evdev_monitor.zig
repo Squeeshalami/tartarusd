@@ -15,17 +15,15 @@ pub const LinuxTimeVal = extern struct {
 };
 
 pub fn monitorDevice(event_path: []const u8) !void {
-    const file = try std.fs.openFileAbsolute(event_path, .{
-        .mode = .read_only,
-    });
-    defer file.close();
+    const fd = try std.posix.openat(std.os.linux.AT.FDCWD, event_path, .{ .CLOEXEC = true }, 0);
+    defer _ = std.c.close(fd);
 
     std.debug.print("monitoring device: {s}\n", .{event_path});
     std.debug.print("press Ctrl+C to stop\n", .{});
 
     while (true) {
         var buf: [@sizeOf(LinuxInputEvent)]u8 = undefined;
-        const bytes_read = try file.readAll(&buf);
+        const bytes_read = try std.posix.read(fd, &buf);
         if (bytes_read != buf.len) return error.ShortRead;
 
         const event: LinuxInputEvent = @bitCast(buf);

@@ -47,6 +47,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/daemon/main.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
     daemon_mod.addImport("common", common_mod);
     daemon_mod.addImport("config", config_mod);
@@ -58,6 +59,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/cli/main.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
     cli_mod.addImport("common", common_mod);
     cli_mod.addImport("config", config_mod);
@@ -68,13 +70,11 @@ pub fn build(b: *std.Build) void {
         .name = "tartarusd",
         .root_module = daemon_mod,
     });
-    daemon.linkLibC();
 
     const cli = b.addExecutable(.{
         .name = "tartarusctl",
         .root_module = cli_mod,
     });
-    cli.linkLibC();
 
     b.installArtifact(daemon);
     b.installArtifact(cli);
